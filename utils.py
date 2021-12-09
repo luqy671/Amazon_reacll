@@ -5,13 +5,13 @@ from collections import defaultdict
 from tqdm import tqdm
 import copy
 import csv
-from models import MyModel_v3
+from models import MyModel
 
 def train_test(config):
     # 读入数据
-    train_list_np, test_x, test_y = Data_Read(config)
+    train_lists, test_x, test_y = Data_Read(config)
     train_loader_list = []
-    for train_data in train_list_np:
+    for train_data in train_lists:
         train_set = TensorDataset(torch.tensor(train_data))
         train_loader = DataLoader(dataset=train_set, batch_size=config.batch_size,
                               shuffle=True, num_workers=0)
@@ -20,7 +20,7 @@ def train_test(config):
     test_loader = DataLoader(dataset=test_set, batch_size=config.batch_size,
                               shuffle=False, num_workers=0)
     # 模型和优化器初始化
-    model = MyModel_v3.MyModel_v3(config).cuda()
+    model = MyModel.MyModel_v3(config).cuda()
     optimizer = torch.optim.Adam(model.parameters(), lr = config.lr, weight_decay=config.L2)
     print("***************model structure***************************")
     print(model)
@@ -53,7 +53,7 @@ def train_test(config):
         for x, y in test_loader:
             x = x.cuda()
             y = y.numpy()
-            recall_topN = model.serving(x)
+            recall_topN = model.serving(x) #[batch, max_N]
 
             test_num += x.shape[0]
             for N in config.N_list:
@@ -82,16 +82,16 @@ def Data_Read(config):
     with open(config.data_dir + config.company_cate + '_seqs.txt') as f:
         for l in f.readlines():
             seq_list.append([int(x) for x in l.split(' ')[:-1]])
-    seq_list_np = []
+    seq_same_len_list = []
     now_len = -1
     for seq in seq_list:
         if(len(seq) != now_len):
             if(now_len != -1):
-                seq_list_np.append(np.array(seq_same_len))
+                seq_same_len_list.append(np.array(seq_same_len))
             now_len = len(seq)
             seq_same_len = []
             seq_same_len.append(seq)
         else:
             seq_same_len.append(seq)
     test_data = np.array(seq_same_len)
-    return seq_list_np, test_data[:,:config.test_cut], test_data[:, config.test_cut:]
+    return seq_same_len_list, test_data[:,:config.test_cut], test_data[:, config.test_cut:]
