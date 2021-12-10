@@ -22,6 +22,7 @@ class MyModel_v3(Multi_Intere_Model):
         self.seq_W1 = nn.Parameter(torch.randn(self.embed_dim, self.attent_dim))
         # 和这个vec越相似， item得分越高
         self.seq_W2= nn.Parameter(torch.randn(self.attent_dim))
+        print("init My v3")
     
     def Gene_activation(self, seq_embed): #[batch, seq_l, embed_dim]
         # seq_embed 转到 attention_vec域（双线性self attention）

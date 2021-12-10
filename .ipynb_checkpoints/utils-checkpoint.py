@@ -5,10 +5,11 @@ from collections import defaultdict
 from tqdm import tqdm
 import copy
 import csv
-from models import MyModel
+from models import MyModel, BaseLine, GlovePreTrain
 
 def train_test(config):
     # 读入数据
+    print("*************** data prepare ***************************")
     train_lists, test_x, test_y = Data_Read(config)
     train_loader_list = []
     for train_data in train_lists:
@@ -19,12 +20,32 @@ def train_test(config):
     test_set = TensorDataset(torch.tensor(test_x), torch.tensor(test_y))
     test_loader = DataLoader(dataset=test_set, batch_size=config.batch_size,
                               shuffle=False, num_workers=0)
-    # 模型和优化器初始化
-    model = MyModel.MyModel_v3(config).cuda()
-    optimizer = torch.optim.Adam(model.parameters(), lr = config.lr, weight_decay=config.L2)
-    print("***************model structure***************************")
-    print(model)
     
+                            
+    # 模型和优化器初始化
+    print("*************** model init *****************************")
+    if config.model_name == "ComiRec":
+        model = BaseLine.ComiRec_Model(config).cuda()
+    else:
+        model = GlovePreTrain.Glove_v3(config).cuda()
+    optimizer = torch.optim.Adam(model.parameters(), lr = config.lr, weight_decay=config.L2)    
+    print(model)  
+    
+    
+    '''*********************  pre training  **************************'''
+    # 预训练
+    if config.Glove == 1:
+        model.train()
+        model.build_co_matrix(train_lists)
+        for epoch in range(config.pre_epochs):
+            optimizer.zero_grad()
+            loss = model.glove_loss()
+            loss.backward()
+            optimizer.step()
+            print("pre_epoch: %d   loss: %10.4f\n"%(epoch+1,loss))
+        
+    
+
     # 训练 && 测试
     print("****************train and test***************************")
     Recall_list = defaultdict(list)
@@ -53,7 +74,7 @@ def train_test(config):
         for x, y in test_loader:
             x = x.cuda()
             y = y.numpy()
-            recall_topN = model.serving(x)
+            recall_topN = model.serving(x) #[batch, max_N]
 
             test_num += x.shape[0]
             for N in config.N_list:

@@ -19,8 +19,6 @@ class Multi_Intere_Model(nn.Module):
         
         self.item_embed = nn.Embedding(config.item_num, self.embed_dim)
         
-        print("Limit_Length: %d"%self.Limit_Length)
-        
         
     def __checkvalid__(self, vec, position):  
         nan_num = torch.isnan(vec).int().sum()
