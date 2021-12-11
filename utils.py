@@ -5,7 +5,7 @@ from collections import defaultdict
 from tqdm import tqdm
 import copy
 import csv
-from models import MyModel, BaseLine, GlovePreTrain
+from models import CRF
 
 def train_test(config):
     # 读入数据
@@ -27,13 +27,14 @@ def train_test(config):
     if config.model_name == "ComiRec":
         model = BaseLine.ComiRec_Model(config).cuda()
     else:
-        model = GlovePreTrain.Glove_v3(config).cuda()
+        model = CRF.CRF_v3(config).cuda()
     optimizer = torch.optim.Adam(model.parameters(), lr = config.lr, weight_decay=config.L2)    
     print(model)  
     
     
     '''*********************  pre training  **************************'''
     # 预训练
+    '''
     if config.Glove == 1:
         model.train()
         model.build_co_matrix(train_lists)
@@ -43,7 +44,8 @@ def train_test(config):
             loss.backward()
             optimizer.step()
             print("pre_epoch: %d   loss: %10.4f\n"%(epoch+1,loss))
-        
+        model = model.cuda()
+    '''    
     
 
     # 训练 && 测试
@@ -54,8 +56,10 @@ def train_test(config):
     for epoch in range(config.epochs):
         model.train()
         total_loss = 0
-
+        
+        
         '''*********************  training  **************************'''
+        
         for train_loader in train_loader_list:
             for data in train_loader:
                 data = data[0].cuda()
@@ -65,6 +69,7 @@ def train_test(config):
                 loss.backward()
                 optimizer.step()
         print("epoch: %d   loss: %10.4f\n"%(epoch+1,total_loss))
+        
 
         '''*********************  testing  **************************'''
         model.eval()

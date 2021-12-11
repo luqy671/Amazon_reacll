@@ -17,6 +17,8 @@ class Multi_Intere_Model(nn.Module):
         self.max_N = config.N_list[-1]
         self.Limit_Length = config.Limit_Length
         
+        self.CRF = config.CRF
+        
         self.item_embed = nn.Embedding(config.item_num, self.embed_dim)
         
         
@@ -67,7 +69,7 @@ class Multi_Intere_Model(nn.Module):
             target = self.norm_embed(seqs[:, i].view(-1,1)).squeeze(1)  #[batch, embed_dim]
             seq_embed = self.norm_embed(seqs[:, :i])  #[batch, seq_l, embed_dim]
             # 计算多个用户的兴趣vec
-            intere_vec = self.Intere_build(seq_embed)  #[batch, intere_num, embed_dim]
+            intere_vec, indices_K = self.Intere_build(seq_embed)  #[batch, intere_num, embed_dim]
             # 找到target item 命中的那个 用户兴趣vec
             hitted_idx = torch.argmax(torch.einsum('ijk, ik ->ij', intere_vec, target), dim=1) #[batch]
             hitted_intere = torch.cat([intere_vec[a,b,:] for a,b in enumerate(hitted_idx)], dim=0).reshape(-1,self.embed_dim) #[batch, embed_dim]
@@ -77,14 +79,22 @@ class Multi_Intere_Model(nn.Module):
             # 计算负例得分
             neg_sample = self.Neg_sample(seqs) #[batch, sample_num, embed_dim] 
             neg_score = torch.einsum('ijk, ik -> ij', neg_sample, hitted_intere) #[batch, sample_num]
+            
+            # 计算CRF得分
+            if self.CRF == 1:
+                pos_crf = self.cal_crf_score(indices_K, target.unsqueeze(1)) #[batch,1]
+                pos_score *= (pos_crf.squeeze(1))
+                neg_crf = self.cal_crf_score(indices_K, neg_sample) #[batch,sample_num]
+                neg_score *= neg_crf
+            
+            # 计算损失
             max_v, max_idx = torch.max(neg_score, 1) # [batch] 每个batch的最大值
             max_v_expand = max_v.view(-1,1).expand(neg_score.shape[0], neg_score.shape[1])
             neg_score = max_v.view(-1,) + torch.log(torch.sum(torch.exp(neg_score-max_v_expand), dim=1)) #[batch]
-            # 计算损失
             loss += (neg_score - pos_score).sum()
         return loss
     
-    def faiss_fun(self, intere_vec, item_embeds):  #[batch, intere_num, embed_dim]，[item_num, embedding_size]
+    def faiss_fun(self, intere_vec, item_embeds, indices_K):  #[batch, intere_num, embed_dim]，[item_num, embedding_size]，[item_num, embedding_size]
         intere_vec = intere_vec.cpu().detach().numpy()
         item_embeds = item_embeds.cpu().detach().numpy()
         intere_vec = intere_vec.astype('float32')
@@ -94,8 +104,15 @@ class Multi_Intere_Model(nn.Module):
         index.add(item_embeds)
         D_list = []
         I_list = []
-        for vec_u in intere_vec :
-            D, I = index.search(np.ascontiguousarray(vec_u), self.max_N)
+        for i, vec_u in enumerate(intere_vec) :
+            D, I = index.search(np.ascontiguousarray(vec_u), self.max_N)#[intere_num,max_N]
+            
+            if self.CRF == 1: #indices_K[batch,intere_num]
+                idx_K = indices_K[i].unsqueeze(0) #[intere_num]
+                embed = self.norm_embed(torch.tensor(I).cuda()).reshape(-1, self.embed_dim).unsqueeze(0) #[intere_num*max_N,embed_dim]
+                crf_score = self.cal_crf_score(idx_K, embed).reshape(self.intere_num,-1) #[intere_num*max_N]         
+                D *= (crf_score.cpu().detach().numpy())
+                
             D_list.append(D)
             I_list.append(I)
         for items in I_list:
@@ -114,8 +131,8 @@ class Multi_Intere_Model(nn.Module):
     def serving(self, seqs): #[batch, seq_l]
         seqs = seqs.long()
         seq_embed = self.norm_embed(seqs) #[batch, seq_l, embed_dim]
-        intere_vec = self.Intere_build(seq_embed)  #[batch, intere_num, embed_dim]
+        intere_vec, indices_K = self.Intere_build(seq_embed)  #[batch, intere_num, embed_dim]
         item_set = torch.tensor([x for x in range(self.item_num)]).cuda()
         item_embeds = self.norm_embed(item_set) #[item_num, embedding_size]
-        recall_topN = self.faiss_fun(intere_vec, item_embeds) #[batch, max_N]
+        recall_topN = self.faiss_fun(intere_vec, item_embeds, indices_K) #[batch, max_N]
         return recall_topN  
