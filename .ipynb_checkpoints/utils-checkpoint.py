@@ -5,7 +5,7 @@ from collections import defaultdict
 from tqdm import tqdm
 import copy
 import csv
-from models import CRF
+from models import BaseLine, MyModel, CRF
 
 def train_test(config):
     # 读入数据
@@ -25,9 +25,13 @@ def train_test(config):
     # 模型和优化器初始化
     print("*************** model init *****************************")
     if config.model_name == "ComiRec":
-        model = BaseLine.ComiRec_Model(config).cuda()
+        model = BaseLine.ComiRec(config).cuda()
+    elif config.model_name == "SINE":
+        model = BaseLine.SINE(config).cuda()
+    elif config.model_name == "CRF":
+        model = CRF.CRF_v3(config).cuda()    
     else:
-        model = CRF.CRF_v3(config).cuda()
+        model = MyModel.MyModel_v3(config).cuda()
     optimizer = torch.optim.Adam(model.parameters(), lr = config.lr, weight_decay=config.L2)    
     print(model)  
     

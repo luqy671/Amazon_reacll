@@ -1,7 +1,7 @@
 class Config():
     def __init__(self):
         
-        self.model_name = 'CRF_v3'
+        self.model_name = 'CRF'
         
         # 地址
         self.data_dir = '../data/'
@@ -9,8 +9,11 @@ class Config():
         self.ans_save_path = '../ans/'
         self.log_path = '../log/'
         
+        #classifier相关
+        self.classifier = 0                
+        
         #CRF相关
-        self.CRF = 0       
+        self.CRF = 1       
         
         #预训练相关
         self.Glove = 0
@@ -33,7 +36,7 @@ class Config():
         
         
         # 其他       
-        self.epochs = 50
+        self.epochs = 100
         self.batch_size = 128
         self.lr = 0.005
         self.L2 = 0
@@ -52,5 +55,11 @@ class Config():
     def model_config_init(self):
         if self.model_name == 'CRF':
             self.CRF = 1
+        if self.Limit_Length == 1 :
+            self.epochs = 50
+        else:
+            self.epochs = 200
+        if self.model_name == 'SINE':
+            self.epoch = 500
         
             
